@@ -3,13 +3,15 @@ INSERT INTO users (id, name, email, role, phone, department, designation, passwo
 ('1','Admin User','admin@workzen.com','admin','+1234567890','Management','System Administrator','password123'),
 ('2','John Doe','john@workzen.com','employee','+1234567891','Engineering','Software Engineer','password123'),
 ('3','Jane Smith','jane@workzen.com','hr_officer','+1234567892','Human Resources','HR Manager','password123'),
-('4','Robert Wilson','robert@workzen.com','payroll_officer','+1234567893','Finance','Payroll Manager','password123')
+('4','Robert Wilson','robert@workzen.com','payroll_officer','+1234567893','Finance','Payroll Manager','password123'),
+('5','Alice Brown','alice@workzen.com','employee','+1234567894','Engineering','QA Engineer','password123'),
+('6','Michael Lee','michael@workzen.com','employee','+1234567895','Engineering','DevOps Engineer','password123')
 ON CONFLICT DO NOTHING;
 
 -- attendance (use today's date)
 INSERT INTO attendance (id, user_id, user_name, date, check_in, check_out, status) VALUES
 ('1','2','John Doe', CURRENT_DATE, '09:00 AM', '06:00 PM', 'present'),
-('2','3','Jane Smith', CURRENT_DATE, '09:15 AM', NULL, 'present')
+('2','5','Alice Brown', CURRENT_DATE, '09:05 AM', '05:50 PM', 'present')
 ON CONFLICT DO NOTHING;
 
 -- leaves

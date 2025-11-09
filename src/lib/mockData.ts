@@ -47,12 +47,14 @@ export const mockAttendance: AttendanceRecord[] = [
   },
   {
     id: '2',
-    userId: '3',
-    userName: 'Jane Smith',
+    userId: '5',
+    userName: 'Alice Brown',
     date: new Date().toISOString().split('T')[0],
-    checkIn: '09:15 AM',
+    checkIn: '09:05 AM',
+    checkOut: '05:50 PM',
     status: 'present',
   },
+  // Note: Michael Lee (userId '6') intentionally has no attendance record today — considered absent
 ];
 
 export const mockLeaves: LeaveRequest[] = [
@@ -107,3 +109,20 @@ export const calculatePayroll = (basicSalary: number, hra: number, allowances: n
     netPay: Math.round(netPay),
   };
 };
+
+export interface UserRecord {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  phone?: string;
+  department?: string;
+  designation?: string;
+}
+
+// three users: two present today (John, Alice) and one absent (Michael)
+export const mockUsers: UserRecord[] = [
+  { id: '2', name: 'John Doe', email: 'john@workzen.com', role: 'employee', phone: '+1234567891', department: 'Engineering', designation: 'Software Engineer' },
+  { id: '5', name: 'Alice Brown', email: 'alice@workzen.com', role: 'employee', phone: '+1234567894', department: 'Engineering', designation: 'QA Engineer' },
+  { id: '6', name: 'Michael Lee', email: 'michael@workzen.com', role: 'employee', phone: '+1234567895', department: 'Engineering', designation: 'DevOps Engineer' },
+];

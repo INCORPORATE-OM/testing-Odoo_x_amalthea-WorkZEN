@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Users, Clock, FileText, IndianRupee, TrendingUp } from 'lucide-react';
 import { LineChart, Line, PieChart, Pie, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
 import { API_BASE } from '@/lib/auth';
+import { mockAttendance, mockUsers, mockLeaves, mockPayroll } from '@/lib/mockData';
 
 // attendanceTrend will be computed from real attendance data (last 7 days)
 
@@ -38,75 +39,79 @@ export default function Dashboard() {
   const [attendanceTrend, setAttendanceTrend] = useState<Array<{ date: string; present: number; absent: number }>>([]);
 
   useEffect(() => {
-    // fetch total employees
-    fetch(`${API_BASE}/api/users`).then((r) => r.json()).then((data) => {
-      if (Array.isArray(data)) setTotalEmployees(data.length);
-    }).catch(() => setTotalEmployees(null));
+    // fetch users, attendance, leaves and payroll in one pass so derived numbers stay consistent
+    Promise.all([
+      fetch(`${API_BASE}/api/users`).then((r) => r.json()).catch(() => []),
+      fetch(`${API_BASE}/api/attendance`).then((r) => r.json()).catch(() => []),
+      fetch(`${API_BASE}/api/leaves`).then((r) => r.json()).catch(() => []),
+      fetch(`${API_BASE}/api/payroll`).then((r) => r.json()).catch(() => []),
+    ])
+      .then(([usersData, attendanceData, leavesData, payrollData]) => {
+  const users = Array.isArray(usersData) && usersData.length > 0 ? usersData : mockUsers;
+  const attendance = Array.isArray(attendanceData) && attendanceData.length > 0 ? attendanceData : mockAttendance;
+  const leaves = Array.isArray(leavesData) && leavesData.length > 0 ? leavesData : mockLeaves;
+  const payroll = Array.isArray(payrollData) && payrollData.length > 0 ? payrollData : mockPayroll;
 
-    // fetch attendance and compute present today
-    fetch(`${API_BASE}/api/attendance`).then((r) => r.json()).then((data) => {
-      if (Array.isArray(data)) {
-        const today = new Date().toISOString().split('T')[0];
-        const present = data.filter((d: any) => {
-          const date = d.date ? new Date(d.date).toISOString().split('T')[0] : today;
-          return date === today && d.check_in;
+        // count only users with role 'employee' for expected present/absent
+        const employeeUsers = users.filter((u: any) => u.role === 'employee');
+        const employeeCount = employeeUsers.length || 0;
+        setTotalEmployees(employeeCount);
+
+        // build a set of employee ids for filtering attendance
+        const employeeIds = new Set(employeeUsers.map((u: any) => String(u.id)));
+
+        // compute present today from attendance records for employees
+        const todayISO = new Date().toISOString().split('T')[0];
+        const present = attendance.filter((d: any) => {
+          const date = d.date ? new Date(d.date).toISOString().split('T')[0] : todayISO;
+          const uid = String(d.user_id || d.userId || '');
+          const checkedIn = Boolean(d.check_in || d.checkIn);
+          const statusPresent = d.status === 'present';
+          return date === todayISO && employeeIds.has(uid) && (checkedIn || statusPresent);
         }).length;
         setPresentToday(present);
-      }
-    }).catch(() => setPresentToday(null));
 
-    // fetch leaves pending
-    fetch(`${API_BASE}/api/leaves`).then((r) => r.json()).then((data) => {
-      if (Array.isArray(data)) {
-        setPendingLeaves(data.filter((l: any) => l.status === 'pending').length);
-      }
-    }).catch(() => setPendingLeaves(null));
+        // pending leaves
+        setPendingLeaves(leaves.filter((l: any) => l.status === 'pending').length);
 
-    // payroll this month
-    fetch(`${API_BASE}/api/payroll`).then((r) => r.json()).then((data) => {
-      if (Array.isArray(data)) {
+        // payroll this month
         const now = new Date();
         const month = now.getMonth() + 1;
         const year = now.getFullYear();
-        const total = data.reduce((acc: number, p: any) => {
+        const total = payroll.reduce((acc: number, p: any) => {
           if (p.month === month && p.year === year) return acc + Number(p.net_pay || p.netPay || 0);
           return acc;
         }, 0);
         setPayrollThisMonth(total);
-      }
-    }).catch(() => setPayrollThisMonth(null));
 
-    // compute attendance trend for last 7 days
-    Promise.all([
-      fetch(`${API_BASE}/api/users`).then((r) => r.json()).catch(() => []),
-      fetch(`${API_BASE}/api/attendance`).then((r) => r.json()).catch(() => []),
-    ]).then(([usersData, attendanceData]) => {
-      const users = Array.isArray(usersData) ? usersData : [];
-      const attendance = Array.isArray(attendanceData) ? attendanceData : [];
+        // build last 7 days labels and counts (employee-only)
+        const days: Array<{ dateISO: string; label: string }> = [];
+        for (let i = 6; i >= 0; i--) {
+          const d = new Date();
+          d.setDate(d.getDate() - i);
+          const dateISO = d.toISOString().split('T')[0];
+          const label = d.toLocaleDateString(undefined, { weekday: 'short' });
+          days.push({ dateISO, label });
+        }
 
-      // count only users with role 'employee' for expected present/absent
-      const employeeCount = users.filter((u: any) => u.role === 'employee').length || 0;
-
-      // build last 7 days labels and counts
-      const days: Array<{ dateISO: string; label: string }> = [];
-      for (let i = 6; i >= 0; i--) {
-        const d = new Date();
-        d.setDate(d.getDate() - i);
-        const dateISO = d.toISOString().split('T')[0];
-        const label = d.toLocaleDateString(undefined, { weekday: 'short' });
-        days.push({ dateISO, label });
-      }
-
-      const trend = days.map((d) => {
-        const present = attendance.filter((a: any) => {
-          const ad = a.date ? new Date(a.date).toISOString().split('T')[0] : null;
-          return ad === d.dateISO && (a.check_in || a.checkIn);
-        }).length;
-        const absent = Math.max(0, employeeCount - present);
-        return { date: d.label, present, absent };
+        const trend = days.map((d) => {
+          const presentCount = attendance.filter((a: any) => {
+            const ad = a.date ? new Date(a.date).toISOString().split('T')[0] : null;
+            const uid = String(a.user_id || a.userId || '');
+            return ad === d.dateISO && employeeIds.has(uid) && (a.check_in || a.checkIn);
+          }).length;
+          const absent = Math.max(0, employeeCount - presentCount);
+          return { date: d.label, present: presentCount, absent };
+        });
+        setAttendanceTrend(trend);
+      })
+      .catch(() => {
+        setTotalEmployees(null);
+        setPresentToday(null);
+        setPendingLeaves(null);
+        setPayrollThisMonth(null);
+        setAttendanceTrend([]);
       });
-      setAttendanceTrend(trend);
-    }).catch(() => setAttendanceTrend([]));
   }, []);
 
   const fmtCurrency = (v: number | null) => v == null ? '—' : `₹${v.toLocaleString()}`;
